@@ -34,3 +34,5 @@ build/
 
 ### Local data (H2 database) ###
 data/
+*.db
+*.trace.db
