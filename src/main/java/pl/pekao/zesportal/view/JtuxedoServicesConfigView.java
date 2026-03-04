@@ -14,6 +14,8 @@ import com.vaadin.flow.component.select.Select;
 import com.vaadin.flow.component.textfield.IntegerField;
 import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.component.textfield.TextArea;
+import com.vaadin.flow.component.upload.Upload;
+import com.vaadin.flow.component.upload.receivers.MemoryBuffer;
 import com.vaadin.flow.data.binder.BeanValidationBinder;
 import com.vaadin.flow.data.binder.ValidationException;
 import com.vaadin.flow.router.PageTitle;
@@ -23,20 +25,30 @@ import pl.pekao.zesportal.entity.JtuxedoServiceField;
 import pl.pekao.zesportal.entity.JtuxedoServiceField.FieldCardinality;
 import pl.pekao.zesportal.entity.JtuxedoServiceField.FieldDataType;
 import pl.pekao.zesportal.service.JtuxedoServiceConfigService;
+import pl.pekao.zesportal.service.XmlServiceDefinitionParser;
+import pl.pekao.zesportal.service.dto.ParsedServiceDefinition;
+import pl.pekao.zesportal.service.dto.ServiceImportDiff;
 
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Route(value = "jtuxed0/konfiguracja-uslug", layout = MainLayout.class)
 @PageTitle("Konfiguracja usług | Zesportal")
 public class JtuxedoServicesConfigView extends VerticalLayout {
 
     private final JtuxedoServiceConfigService configService;
+    private final XmlServiceDefinitionParser xmlParser;
     private final Grid<JtuxedoService> grid;
     private final BeanValidationBinder<JtuxedoService> serviceBinder = new BeanValidationBinder<>(JtuxedoService.class);
 
-    public JtuxedoServicesConfigView(JtuxedoServiceConfigService configService) {
+    public JtuxedoServicesConfigView(JtuxedoServiceConfigService configService,
+                                     XmlServiceDefinitionParser xmlParser) {
         this.configService = configService;
+        this.xmlParser = xmlParser;
         this.grid = new Grid<>(JtuxedoService.class, false);
 
         setPadding(true);
@@ -52,8 +64,9 @@ public class JtuxedoServicesConfigView extends VerticalLayout {
         H2 title = new H2("Konfiguracja usług");
         Button addButton = new Button("Dodaj usługę", e -> openServiceDialog(new JtuxedoService()));
         addButton.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
+        Button importXmlButton = new Button("Import z XML", e -> openImportXmlDialog());
 
-        HorizontalLayout header = new HorizontalLayout(title, addButton);
+        HorizontalLayout header = new HorizontalLayout(title, new HorizontalLayout(addButton, importXmlButton));
         header.setWidthFull();
         header.setJustifyContentMode(FlexComponent.JustifyContentMode.BETWEEN);
         header.setAlignItems(FlexComponent.Alignment.CENTER);
@@ -97,7 +110,7 @@ public class JtuxedoServicesConfigView extends VerticalLayout {
         dialog.setHeaderTitle(isNew ? "Nowa usługa" : "Edycja usługi");
         dialog.setWidth("700px");
 
-        TextField nameField = new TextField("Nazwa usługi");
+        TextField nameField = new TextField("Nazwa");
         nameField.setRequired(true);
         nameField.setWidthFull();
 
@@ -163,7 +176,11 @@ public class JtuxedoServicesConfigView extends VerticalLayout {
                 dialog.close();
                 Notification.show("Usługa zapisana", 2000, Notification.Position.MIDDLE);
             } catch (ValidationException ex) {
-                Notification.show("Wypełnij nazwę usługi", 3000, Notification.Position.MIDDLE);
+                String msg = ex.getValidationErrors().stream()
+                        .map(ve -> ve.getErrorMessage())
+                        .findFirst()
+                        .orElse("Uzupełnij wymagane pola (nazwa).");
+                Notification.show(msg, 3000, Notification.Position.MIDDLE);
             }
         });
         saveBtn.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
@@ -244,7 +261,11 @@ public class JtuxedoServicesConfigView extends VerticalLayout {
                 fieldsGrid.getDataProvider().refreshAll();
                 fd.close();
             } catch (ValidationException ex) {
-                Notification.show("Wypełnij nazwę pola", 3000, Notification.Position.MIDDLE);
+                String msg = ex.getValidationErrors().stream()
+                        .map(ve -> ve.getErrorMessage())
+                        .findFirst()
+                        .orElse("Uzupełnij wymagane pola.");
+                Notification.show(msg, 3000, Notification.Position.MIDDLE);
             }
         });
         saveFieldBtn.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
@@ -252,6 +273,145 @@ public class JtuxedoServicesConfigView extends VerticalLayout {
         fd.add(form);
         fd.getFooter().add(new Button("Anuluj", ev -> fd.close()), saveFieldBtn);
         fd.open();
+    }
+
+    private void openImportXmlDialog() {
+        Dialog dialog = new Dialog();
+        dialog.setHeaderTitle("Import definicji usług z pliku XML");
+        dialog.setWidth("600px");
+
+        MemoryBuffer buffer = new MemoryBuffer();
+        Upload upload = new Upload(buffer);
+        upload.setAcceptedFileTypes(".xml", "application/xml", "text/xml");
+        upload.setMaxFileSize(5 * 1024 * 1024);
+        upload.setWidthFull();
+
+        TextField searchField = new TextField();
+        searchField.setPlaceholder("Szukaj po nazwie lub opisie...");
+        searchField.setClearButtonVisible(true);
+        searchField.setWidthFull();
+        searchField.setVisible(false);
+
+        Grid<ParsedServiceDefinition> servicesGrid = new Grid<>(ParsedServiceDefinition.class, false);
+        servicesGrid.setSelectionMode(Grid.SelectionMode.SINGLE);
+        servicesGrid.addColumn(ParsedServiceDefinition::getName).setHeader("Nazwa").setWidth("200px");
+        servicesGrid.addColumn(ParsedServiceDefinition::getDescription).setHeader("Opis").setFlexGrow(1);
+        servicesGrid.addColumn(p -> String.valueOf(p.getInputFields().size())).setHeader("Pola wejściowe").setWidth("120px");
+        servicesGrid.setWidthFull();
+        servicesGrid.setHeight("280px");
+        servicesGrid.setVisible(false);
+
+        AtomicReference<List<ParsedServiceDefinition>> parsedListRef = new AtomicReference<>(List.of());
+
+        Runnable applyFilter = () -> {
+            List<ParsedServiceDefinition> full = parsedListRef.get();
+            String q = searchField.getValue();
+            if (q == null || q.isBlank()) {
+                servicesGrid.setItems(full);
+            } else {
+                String lower = q.trim().toLowerCase();
+                List<ParsedServiceDefinition> filtered = full.stream()
+                        .filter(p -> (p.getName() != null && p.getName().toLowerCase().contains(lower))
+                                || (p.getDescription() != null && p.getDescription().toLowerCase().contains(lower)))
+                        .toList();
+                servicesGrid.setItems(filtered);
+            }
+        };
+
+        searchField.addValueChangeListener(e -> applyFilter.run());
+
+        upload.addSucceededListener(event -> {
+            try (InputStream is = buffer.getInputStream()) {
+                String xml = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+                List<ParsedServiceDefinition> list = xmlParser.parse(xml);
+                parsedListRef.set(list);
+                searchField.setValue("");
+                searchField.setVisible(!list.isEmpty());
+                applyFilter.run();
+                servicesGrid.setVisible(!list.isEmpty());
+                if (list.isEmpty()) {
+                    Notification.show("W pliku nie znaleziono żadnych definicji usług (element <service>).", 4000, Notification.Position.MIDDLE);
+                }
+            } catch (Exception ex) {
+                parsedListRef.set(List.of());
+                searchField.setVisible(false);
+                servicesGrid.setItems(List.of());
+                servicesGrid.setVisible(false);
+                Notification.show(ex.getMessage() != null ? ex.getMessage() : "Błąd odczytu pliku XML", 5000, Notification.Position.MIDDLE);
+            }
+        });
+
+        Button importBtn = new Button("Importuj wybraną", e -> {
+            ParsedServiceDefinition selected = servicesGrid.getSelectedItems().stream().findFirst().orElse(null);
+            if (selected == null) {
+                Notification.show("Wybierz usługę z listy.", 3000, Notification.Position.MIDDLE);
+                return;
+            }
+            boolean exists = configService.findServiceByName(selected.getName()).isPresent();
+            if (exists) {
+                Optional<ServiceImportDiff> diffOpt = configService.getImportDiff(selected.getName(), selected);
+                Dialog diffDialog = new Dialog();
+                diffDialog.setHeaderTitle("Usługa \"" + selected.getName() + "\" już istnieje – podgląd zmian");
+                diffDialog.setWidth("520px");
+
+                VerticalLayout diffContent = new VerticalLayout();
+                diffContent.setSpacing(true);
+                diffContent.setPadding(false);
+                if (diffOpt.isPresent()) {
+                    ServiceImportDiff diff = diffOpt.get();
+                    if (diff.hasAnyChanges()) {
+                        if (diff.isDescriptionChanged()) {
+                            diffContent.add(new com.vaadin.flow.component.html.H4("Opis"));
+                            diffContent.add(new com.vaadin.flow.component.html.Span("Obecny: " + (diff.getDescriptionOld().isBlank() ? "—" : diff.getDescriptionOld())));
+                            diffContent.add(new com.vaadin.flow.component.html.Span("Z pliku: " + (diff.getDescriptionNew().isBlank() ? "—" : diff.getDescriptionNew())));
+                        }
+                        if (!diff.getAddedFieldNames().isEmpty()) {
+                            diffContent.add(new com.vaadin.flow.component.html.H4("Pola dodane"));
+                            diffContent.add(new com.vaadin.flow.component.html.Span(String.join(", ", diff.getAddedFieldNames())));
+                        }
+                        if (!diff.getRemovedFieldNames().isEmpty()) {
+                            diffContent.add(new com.vaadin.flow.component.html.H4("Pola usunięte"));
+                            diffContent.add(new com.vaadin.flow.component.html.Span(String.join(", ", diff.getRemovedFieldNames())));
+                        }
+                        if (!diff.getModifiedFieldDescriptions().isEmpty()) {
+                            diffContent.add(new com.vaadin.flow.component.html.H4("Pola zmienione"));
+                            diff.getModifiedFieldDescriptions().forEach(s -> diffContent.add(new com.vaadin.flow.component.html.Span(s)));
+                        }
+                    } else {
+                        diffContent.add(new com.vaadin.flow.component.html.Span("Brak różnic względem obecnej definicji."));
+                    }
+                }
+                diffContent.add(new com.vaadin.flow.component.html.Hr());
+                diffContent.add(new com.vaadin.flow.component.html.Span("Czy nadpisać definicję usługi?"));
+                Button overwriteBtn = new Button("Nadpisz", ev -> {
+                    configService.importFromParsed(selected, true);
+                    refreshGrid();
+                    diffDialog.close();
+                    dialog.close();
+                    Notification.show("Usługa \"" + selected.getName() + "\" została nadpisana.", 2000, Notification.Position.MIDDLE);
+                });
+                overwriteBtn.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
+                Button cancelDiffBtn = new Button("Anuluj", ev2 -> diffDialog.close());
+                diffDialog.add(diffContent);
+                diffDialog.getFooter().add(cancelDiffBtn, overwriteBtn);
+                diffDialog.open();
+            } else {
+                configService.importFromParsed(selected, false);
+                refreshGrid();
+                dialog.close();
+                Notification.show("Usługa \"" + selected.getName() + "\" została zaimportowana.", 2000, Notification.Position.MIDDLE);
+            }
+        });
+        importBtn.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
+
+        VerticalLayout content = new VerticalLayout();
+        content.add(upload);
+        content.add(searchField);
+        content.add(servicesGrid);
+        content.setWidthFull();
+        dialog.add(content);
+        dialog.getFooter().add(new Button("Zamknij", ev -> dialog.close()), importBtn);
+        dialog.open();
     }
 
     private void deleteService(JtuxedoService service) {

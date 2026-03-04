@@ -28,6 +28,20 @@ public class ImportDefinition {
     @JoinColumn(name = "jtuxedo_service_id", nullable = false)
     private JtuxedoService jtuxedoService;
 
+    /** Źródło danych: plik lub widok z bazy danych. */
+    @NotNull
+    @Enumerated(EnumType.STRING)
+    @Column(name = "import_source", nullable = false, length = 20)
+    private ImportSource importSource = ImportSource.FILE;
+
+    /** Dla DATABASE: komponent typu DB (ServerService). */
+    @Column(name = "db_server_service_id")
+    private Long dbServerServiceId;
+
+    /** Dla DATABASE: nazwa widoku (tabeli) do odczytu. */
+    @Column(name = "view_name", length = 255)
+    private String viewName;
+
     @NotNull
     @Enumerated(EnumType.STRING)
     @Column(name = "file_type", nullable = false, length = 10)
@@ -73,6 +87,30 @@ public class ImportDefinition {
         this.jtuxedoService = jtuxedoService;
     }
 
+    public ImportSource getImportSource() {
+        return importSource;
+    }
+
+    public void setImportSource(ImportSource importSource) {
+        this.importSource = importSource;
+    }
+
+    public Long getDbServerServiceId() {
+        return dbServerServiceId;
+    }
+
+    public void setDbServerServiceId(Long dbServerServiceId) {
+        this.dbServerServiceId = dbServerServiceId;
+    }
+
+    public String getViewName() {
+        return viewName;
+    }
+
+    public void setViewName(String viewName) {
+        this.viewName = viewName;
+    }
+
     public FileType getFileType() {
         return fileType;
     }
@@ -111,6 +149,21 @@ public class ImportDefinition {
 
     public void setMappings(List<ImportFieldMapping> mappings) {
         this.mappings = mappings;
+    }
+
+    public enum ImportSource {
+        FILE("Plik"),
+        DATABASE("Baza danych");
+
+        private final String displayName;
+
+        ImportSource(String displayName) {
+            this.displayName = displayName;
+        }
+
+        public String getDisplayName() {
+            return displayName;
+        }
     }
 
     public enum FileType {

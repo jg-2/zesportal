@@ -14,7 +14,8 @@ public interface TaskExecutor {
 
     /**
      * Wykonuje zadanie. Konfiguracja w template.getConfig() (JSON).
+     * Zwraca wynik (krótki komunikat + opcjonalnie pełne dane do zapisu JSON).
      * W razie błędu rzuca wyjątek – obsługa statusu FAILED jest w TaskService.
      */
-    void execute(Task task, TaskTemplate template) throws Exception;
+    TaskExecutionResult execute(Task task, TaskTemplate template) throws Exception;
 }

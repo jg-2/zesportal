@@ -1,0 +1,33 @@
+ZES Portal – uruchomienie z gotowego ZIP
+========================================
+
+Wymagania: Java 17 lub nowsza (java -version).
+
+Ten ZIP zawiera JAR zbudowany w trybie PRODUCTION (profil -Pproduction).
+Nie uruchamiaj JAR-a zbudowanego bez tego profilu (będzie błąd jar-resources).
+Do zbudowania ZIP ze źródeł (bez instalowanego Mavena): .\mvnw.cmd clean package "-Pproduction,dist" -DskipTests (Windows) lub ./mvnw ... (Linux/Mac).
+
+1. Rozpakuj archiwum zesportal-*-dist.zip.
+
+2. (Opcjonalnie) Edytuj application.properties – konfiguracja jest na zewnątrz JAR-a,
+   możesz zmieniać m.in. port, bazę, test.jolt bez ponownego builda.
+
+3. (Opcjonalnie) Do katalogu lib/ możesz dołożyć:
+   - jolt.jar (Tuxedo) – skopiuj z instalacji Oracle Tuxedo; w application.properties ustaw test.jolt=false
+   - sterowniki JDBC (np. postgresql-*.jar, informix) – jeśli używasz komponentów typu „Baza danych” do innych baz niż H2
+
+4. Windows: uruchom run.bat
+   Linux/Mac: chmod +x run.sh && ./run.sh
+
+   Albo ręcznie: java -Dloader.path=lib -Dvaadin.productionMode=true -jar zesportal-*.jar
+
+5. Otwórz przeglądarkę: http://localhost:8080
+
+Struktura:
+  zesportal-*.jar     – aplikacja
+  application.properties – konfiguracja (można edytować)
+  lib/                – opcjonalnie: jolt.jar (Tuxedo), sterowniki JDBC (np. postgresql.jar, informix) – dołóż według potrzeb
+  run.bat, run.sh     – skrypty uruchomienia
+
+Baza H2 tworzy się automatycznie w podkatalogu data/ (pusta przy pierwszym starcie).
+Konsola H2: http://localhost:8080/h2-console (user: sa, hasło: puste).

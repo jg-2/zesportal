@@ -25,4 +25,7 @@ public interface ServerServiceRepository extends JpaRepository<ServerService, Lo
 
     @Query("SELECT ss FROM ServerService ss LEFT JOIN FETCH ss.server LEFT JOIN FETCH ss.environment WHERE ss.id = :id")
     Optional<ServerService> findByIdWithServer(Long id);
+
+    @Query("SELECT ss FROM ServerService ss LEFT JOIN FETCH ss.server LEFT JOIN FETCH ss.environment WHERE ss.type = :type ORDER BY ss.environment.code, ss.name")
+    List<ServerService> findByType(ServiceType type);
 }

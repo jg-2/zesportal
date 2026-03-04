@@ -1,0 +1,39 @@
+# Release do GitHub przy pushu tagu v* (np. v1.0.0).
+# Użycie: nadaj wersję w pom.xml (bez -SNAPSHOT), commit, tag, push:
+#   git tag v1.0.0
+#   git push origin v1.0.0
+name: Build and GitHub Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Build (production JAR)
+        run: mvn clean package -Pproduction -DskipTests -B -q
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            target/zesportal-*.jar
+          generate_release_notes: true
+          draft: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

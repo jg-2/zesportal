@@ -17,7 +17,7 @@ public class JtuxedoServiceField {
     @JoinColumn(name = "jtuxedo_service_id", nullable = false)
     private JtuxedoService jtuxedoService;
 
-    @NotBlank
+    @NotBlank(message = "Podaj nazwę pola.")
     @Column(name = "name", nullable = false, length = 255)
     private String name;
 

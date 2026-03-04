@@ -2,6 +2,7 @@ package pl.pekao.zesportal.view;
 
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
+import com.vaadin.flow.component.checkbox.Checkbox;
 import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.formlayout.FormLayout;
 import com.vaadin.flow.component.grid.Grid;
@@ -21,9 +22,12 @@ import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import pl.pekao.zesportal.entity.Task;
 import pl.pekao.zesportal.entity.TaskTemplate;
+import pl.pekao.zesportal.entity.TaskTemplate.TaskTemplateType;
 import pl.pekao.zesportal.service.TaskService;
 import pl.pekao.zesportal.service.TaskTemplateService;
 
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 @Route(value = "tasks/list", layout = MainLayout.class)
@@ -116,14 +120,19 @@ public class ListaZadanView extends VerticalLayout {
             }
         });
 
+        Checkbox saveResultCheckbox = new Checkbox("Zapisz pełny rezultat (JSON) po zakończeniu");
+        saveResultCheckbox.setValue(false);
+        saveResultCheckbox.setWidthFull();
+
         BeanValidationBinder<Task> binder = new BeanValidationBinder<>(Task.class);
         binder.forField(nameField).bind("name");
         binder.forField(descriptionField).bind("description");
         binder.forField(prioritySelect).bind("priority");
         binder.forField(templateSelect).bind("taskTemplate");
+        binder.forField(saveResultCheckbox).bind("saveResult");
         binder.readBean(taskToCreate);
 
-        FormLayout form = new FormLayout(nameField, descriptionField, prioritySelect, templateSelect);
+        FormLayout form = new FormLayout(nameField, descriptionField, prioritySelect, templateSelect, saveResultCheckbox);
         form.setResponsiveSteps(new FormLayout.ResponsiveStep("0", 1));
 
         Button saveBtn = new Button("Utwórz i uruchom", e -> {
@@ -133,7 +142,9 @@ public class ListaZadanView extends VerticalLayout {
                         taskToCreate.getName(),
                         taskToCreate.getDescription(),
                         taskToCreate.getPriority(),
-                        taskToCreate.getTaskTemplate() != null ? taskToCreate.getTaskTemplate().getId() : null
+                        taskToCreate.getTaskTemplate() != null ? taskToCreate.getTaskTemplate().getId() : null,
+                        taskToCreate.getConfig(),
+                        taskToCreate.getSaveResult()
                 );
                 taskService.executeTaskImmediately(created);
                 refreshGrid();
@@ -155,7 +166,9 @@ public class ListaZadanView extends VerticalLayout {
                                 taskToCreate.getName(),
                                 taskToCreate.getDescription(),
                                 taskToCreate.getPriority(),
-                                taskToCreate.getTaskTemplate() != null ? taskToCreate.getTaskTemplate().getId() : null
+                                taskToCreate.getTaskTemplate() != null ? taskToCreate.getTaskTemplate().getId() : null,
+                                taskToCreate.getConfig(),
+                                taskToCreate.getSaveResult()
                         );
                         taskService.addTaskToQueue(created);
                         refreshGrid();
@@ -174,6 +187,8 @@ public class ListaZadanView extends VerticalLayout {
         grid.addColumn(Task::getId).setHeader("ID").setWidth("70px").setFlexGrow(0);
         grid.addColumn(Task::getName).setHeader("Nazwa").setWidth("180px");
         grid.addColumn(Task::getDescription).setHeader("Opis");
+        grid.addColumn(t -> t.getType() != null ? t.getType().getDisplayName() : (t.getTaskTemplate() != null ? t.getTaskTemplate().getType().getDisplayName() : "—"))
+                .setHeader("Typ").setWidth("90px").setFlexGrow(0);
         grid.addColumn(t -> t.getTaskTemplate() != null ? t.getTaskTemplate().getName() : "-")
                 .setHeader("Szablon").setWidth("140px").setFlexGrow(0);
         grid.addColumn(t -> t.getPriority().getDisplayName()).setHeader("Priorytet").setWidth("100px").setFlexGrow(0);
@@ -185,11 +200,116 @@ public class ListaZadanView extends VerticalLayout {
         grid.addColumn(t -> t.getCompletedAt() != null ?
                 t.getCompletedAt().toString().substring(0, 19).replace("T", " ") : "")
                 .setHeader("Zakończono").setWidth("160px").setFlexGrow(0);
-        grid.addColumn(Task::getErrorMessage).setHeader("Błąd");
+        grid.addColumn(t -> truncateResult(t.getResult())).setHeader("Rezultat").setFlexGrow(1);
+
+        grid.addItemDoubleClickListener(e -> openTaskDetailsDialog(e.getItem()));
 
         grid.setWidthFull();
         grid.setHeight("600px");
         return grid;
+    }
+
+    private static String truncateResult(String result) {
+        if (result == null || result.isEmpty()) return "";
+        int max = 120;
+        if (result.length() <= max) return result;
+        return result.substring(0, max) + "…";
+    }
+
+    private void openTaskDetailsDialog(Task task) {
+        Dialog dialog = new Dialog();
+        dialog.setHeaderTitle("Szczegóły zadania: " + (task.getName() != null ? task.getName() : "—"));
+        dialog.setWidth("700px");
+        dialog.setHeight("85vh");
+
+        FormLayout form = new FormLayout();
+        TextField nameField = new TextField("Nazwa");
+        nameField.setValue(task.getName() != null ? task.getName() : "");
+        nameField.setReadOnly(true);
+        nameField.setWidthFull();
+        TextField typeField = new TextField("Typ");
+        typeField.setValue(task.getType() != null ? task.getType().getDisplayName() : "—");
+        typeField.setReadOnly(true);
+        typeField.setWidthFull();
+        TextField statusField = new TextField("Status");
+        statusField.setValue(task.getStatus().getDisplayName());
+        statusField.setReadOnly(true);
+        statusField.setWidthFull();
+        TextField priorityField = new TextField("Priorytet");
+        priorityField.setValue(task.getPriority().getDisplayName());
+        priorityField.setReadOnly(true);
+        priorityField.setWidthFull();
+        form.add(nameField, typeField, statusField, priorityField);
+
+        String created = task.getCreatedAt() != null
+                ? task.getCreatedAt().atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
+                : "—";
+        String started = task.getStartedAt() != null
+                ? task.getStartedAt().atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
+                : "—";
+        String completed = task.getCompletedAt() != null
+                ? task.getCompletedAt().atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
+                : "—";
+        TextField createdField = new TextField("Utworzono");
+        createdField.setValue(created);
+        createdField.setReadOnly(true);
+        createdField.setWidthFull();
+        TextField startedField = new TextField("Start");
+        startedField.setValue(started);
+        startedField.setReadOnly(true);
+        startedField.setWidthFull();
+        TextField completedField = new TextField("Zakończono");
+        completedField.setValue(completed);
+        completedField.setReadOnly(true);
+        completedField.setWidthFull();
+        form.add(createdField, startedField, completedField);
+        if (task.getDescription() != null && !task.getDescription().isBlank()) {
+            TextArea descArea = new TextArea("Opis", task.getDescription(), "");
+            descArea.setReadOnly(true);
+            descArea.setWidthFull();
+            form.add(descArea);
+        }
+        if (task.getConfig() != null && !task.getConfig().isBlank()) {
+            TextArea configArea = new TextArea("Config", task.getConfig(), "");
+            configArea.setReadOnly(true);
+            configArea.setWidthFull();
+            configArea.setMaxHeight("80px");
+            form.add(configArea);
+        }
+
+        TextArea resultArea = new TextArea("Rezultat", task.getResult() != null ? task.getResult() : "(brak)", "");
+        resultArea.setReadOnly(true);
+        resultArea.setWidthFull();
+        resultArea.setMinHeight("200px");
+        resultArea.getStyle().set("flex-grow", "1");
+
+        Button saveToFileBtn = new Button("Zapisz do pliku", VaadinIcon.DOWNLOAD.create(), e -> {
+            String config = "{\"sourceTaskId\": " + task.getId() + "}";
+            Task saveTask = taskService.createTask(
+                    "Zapis wyniku: " + (task.getName() != null ? task.getName() : "zadanie " + task.getId()),
+                    "Zapis wyniku zadania " + task.getId() + " do pliku",
+                    Task.TaskPriority.LOW,
+                    null,
+                    config,
+                    false,
+                    TaskTemplateType.SAVE_FILE
+            );
+            taskService.addTaskToQueue(saveTask);
+            Notification.show("Zadanie zapisu do pliku dodane do kolejki (niski priorytet)", 3000, Notification.Position.MIDDLE);
+            dialog.close();
+        });
+        saveToFileBtn.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
+
+        VerticalLayout content = new VerticalLayout();
+        content.add(form);
+        content.add(resultArea);
+        content.setFlexGrow(1, resultArea);
+        content.setSizeFull();
+        content.setPadding(false);
+
+        dialog.getFooter().add(saveToFileBtn, new Button("Zamknij", ev -> dialog.close()));
+        dialog.add(content);
+        dialog.open();
     }
 
     private HorizontalLayout createStatusIcon(Task task) {

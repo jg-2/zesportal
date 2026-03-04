@@ -183,6 +183,7 @@ public class MainLayout extends AppLayout {
                 .set("white-space", "nowrap");
         SideNavItem jtuxed0Item = new SideNavItem("", "", jtuxedoWebLabel);
         jtuxed0Item.addItem(new SideNavItem("Wywołanie usług", "jtuxed0/wywolaj-uslugi"));
+        jtuxed0Item.addItem(new SideNavItem("Import", "jtuxed0/wczytaj-z-pliku"));
         jtuxed0Item.addItem(new SideNavItem("Konfiguracja usług", "jtuxed0/konfiguracja-uslug"));
         jtuxed0Item.addItem(new SideNavItem("Definicje importów", "jtuxed0/definicje-importow"));
         nav.addItem(jtuxed0Item);
@@ -195,7 +196,14 @@ public class MainLayout extends AppLayout {
         
         // Papiery
         SideNavItem papieryItem = new SideNavItem("Papiery", "");
-        papieryItem.addItem(new SideNavItem("Zakładanie papierów", "papiery/zakladanie"));
+        papieryItem.addItem(new SideNavItem("Nowe papiery", "papiery/zakladanie"));
+        papieryItem.addItem(new SideNavItem("Wykluczone", "papiery/wykluczone"));
+        papieryItem.addItem(new SideNavItem("Ostatnie notowanie", "papiery/ostatnie-notowanie"));
+        papieryItem.addItem(new SideNavItem("InstrumentID", "papiery/instrument-id"));
+        papieryItem.addItem(new SideNavItem("Spółki", "papiery/spolki"));
+        papieryItem.addItem(new SideNavItem("Zmiana rynku", "papiery/zmiana-rynku"));
+        papieryItem.addItem(new SideNavItem("Wielkość emisji", "papiery/wielkosc-emisji"));
+        papieryItem.addItem(new SideNavItem("Konfiguracja", "papiery/konfiguracja"));
         nav.addItem(papieryItem);
         
         // Configuration

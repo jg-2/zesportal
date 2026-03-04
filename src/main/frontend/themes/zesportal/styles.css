@@ -1,0 +1,86 @@
+/* Zesportal – mniejsza czcionka, spokojna szata graficzna */
+
+/* === Typografia (mniejsza czcionka) === */
+html {
+  /* Bazowy rozmiar: Lumo M to ~1rem; obniżamy całą skalę */
+  --lumo-font-size-xxs: 0.6875rem;
+  --lumo-font-size-xs: 0.75rem;
+  --lumo-font-size-s: 0.8125rem;
+  --lumo-font-size-m: 0.875rem;
+  --lumo-font-size-l: 0.9375rem;
+  --lumo-font-size-xl: 1rem;
+  --lumo-font-size-xxl: 1.125rem;
+  --lumo-font-size-xxxl: 1.25rem;
+
+  --lumo-line-height-m: 1.4;
+  --lumo-line-height-s: 1.2;
+}
+
+/* === Kolory – stonowana paleta === */
+html {
+  --lumo-primary-color: #4338ca;
+  --lumo-primary-text-color: #4338ca;
+  --lumo-primary-contrast-color: #fff;
+  --lumo-base-color: #fafafa;
+  --lumo-body-text-color: #334155;
+  --lumo-secondary-text-color: #64748b;
+  --lumo-tertiary-text-color: #94a3b8;
+  --lumo-header-text-color: #1e293b;
+  --lumo-error-color: #b91c1c;
+  --lumo-success-color: #15803d;
+  --lumo-border-color: #e2e8f0;
+  --lumo-contrast-5pct: rgba(0, 0, 0, 0.05);
+  --lumo-contrast-10pct: rgba(0, 0, 0, 0.08);
+  --lumo-contrast-20pct: rgba(0, 0, 0, 0.12);
+}
+
+/* === Spacing – zwarte layouty === */
+html {
+  --lumo-space-xs: 0.25rem;
+  --lumo-space-s: 0.5rem;
+  --lumo-space-m: 0.75rem;
+  --lumo-space-l: 1rem;
+  --lumo-space-xl: 1.5rem;
+}
+
+/* === Komponenty – mniejsze paddingi i zaokrąglenia === */
+vaadin-text-field,
+vaadin-password-field,
+vaadin-number-field,
+vaadin-email-field,
+vaadin-combo-box,
+vaadin-select,
+vaadin-text-area {
+  --lumo-text-field-size: 2rem;
+}
+
+vaadin-button {
+  --lumo-font-size-s: 0.8125rem;
+}
+
+vaadin-grid {
+  --lumo-font-size-s: 0.8125rem;
+}
+
+/* Główny obszar treści – delikatne tło i czytelność */
+[slot="content"] {
+  background: var(--lumo-base-color);
+  font-size: var(--lumo-font-size-m);
+}
+
+/* Drawer (boczne menu) – mniejszy tekst */
+vaadin-side-nav,
+vaadin-side-nav-item {
+  font-size: var(--lumo-font-size-s);
+}
+
+/* Nagłówki w widokach – bez nadmiernego rozmiaru */
+h1, h2, h3 {
+  font-weight: 600;
+  color: var(--lumo-header-text-color);
+  letter-spacing: 0.01em;
+}
+
+h1 { font-size: var(--lumo-font-size-xxl); }
+h2 { font-size: var(--lumo-font-size-xl); }
+h3 { font-size: var(--lumo-font-size-l); }

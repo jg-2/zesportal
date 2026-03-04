@@ -29,6 +29,11 @@ public class ServerServiceManagementService {
     }
 
     @Transactional(readOnly = true)
+    public List<ServerService> findDbServices() {
+        return repository.findByType(ServiceType.DB);
+    }
+
+    @Transactional(readOnly = true)
     public List<ServerService> findByServerId(Long serverId) {
         return repository.findByServerIdOrderByNameAsc(serverId);
     }

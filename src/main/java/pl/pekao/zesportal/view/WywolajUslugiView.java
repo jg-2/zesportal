@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
+import com.vaadin.flow.component.checkbox.Checkbox;
 import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.H3;
 import com.vaadin.flow.component.html.Paragraph;
@@ -20,7 +21,6 @@ import pl.pekao.zesportal.entity.JtuxedoService;
 import pl.pekao.zesportal.entity.JtuxedoServiceField;
 import pl.pekao.zesportal.entity.ServerService;
 import pl.pekao.zesportal.entity.ServerService.ServiceType;
-import pl.pekao.zesportal.entity.TaskTemplate;
 import pl.pekao.zesportal.entity.TaskTemplate.TaskTemplateType;
 import pl.pekao.zesportal.service.EnvironmentService;
 import pl.pekao.zesportal.service.JtuxedoServiceConfigService;
@@ -47,6 +47,7 @@ public class WywolajUslugiView extends VerticalLayout {
     private final VerticalLayout fieldsPanel = new VerticalLayout();
     private final Map<String, TextField> fieldInputsByName = new LinkedHashMap<>();
     private final Paragraph resultArea = new Paragraph();
+    private final Checkbox saveResultCheckbox = new Checkbox("Zapisz rezultat do JSON (pełny wynik w polu Rezultat po zakończeniu)");
     private static final ObjectMapper JSON = new ObjectMapper();
 
     public WywolajUslugiView(EnvironmentService environmentService,
@@ -106,6 +107,9 @@ public class WywolajUslugiView extends VerticalLayout {
         fieldsPanel.setVisible(false);
         fieldsPanel.setWidthFull();
 
+        saveResultCheckbox.setValue(false);
+        saveResultCheckbox.setWidthFull();
+
         Button callButton = new Button("Wywołaj", e -> callService());
         callButton.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
 
@@ -122,12 +126,14 @@ public class WywolajUslugiView extends VerticalLayout {
         add(componentSelect);
         add(tuxedoServiceSelect);
         add(fieldsPanel);
+        add(saveResultCheckbox);
         add(callButton);
         add(resultArea);
         setAlignSelf(FlexComponent.Alignment.START, environmentSelect);
         setAlignSelf(FlexComponent.Alignment.START, componentSelect);
         setAlignSelf(FlexComponent.Alignment.START, tuxedoServiceSelect);
         setAlignSelf(FlexComponent.Alignment.START, fieldsPanel);
+        setAlignSelf(FlexComponent.Alignment.START, saveResultCheckbox);
         setAlignSelf(FlexComponent.Alignment.START, callButton);
     }
 
@@ -194,12 +200,6 @@ public class WywolajUslugiView extends VerticalLayout {
             return;
         }
 
-        TaskTemplate tuxedoTemplate = taskTemplateService.findByType(TaskTemplateType.TUXEDO).stream().findFirst().orElse(null);
-        if (tuxedoTemplate == null) {
-            Notification.show("Brak szablonu zadań Tuxedo. Dodaj szablon typu Tuxedo w Tasks → Task templates.", 5000, Notification.Position.MIDDLE);
-            return;
-        }
-
         ObjectNode parameters = JSON.createObjectNode();
         for (Map.Entry<String, TextField> e : fieldInputsByName.entrySet()) {
             String value = e.getValue().getValue();
@@ -222,7 +222,9 @@ public class WywolajUslugiView extends VerticalLayout {
                     component.getId(), tuxedoService.getId());
         }
 
-        var task = taskService.createTask(taskName, "Wywołanie z widoku Wywołanie usług", pl.pekao.zesportal.entity.Task.TaskPriority.NORMAL, tuxedoTemplate.getId(), config);
+        // Zadanie Tuxedo bez szablonu – typ TUXEDO ustawiony jawnie, config w task
+        var task = taskService.createTask(taskName, "Wywołanie z widoku Wywołanie usług",
+                pl.pekao.zesportal.entity.Task.TaskPriority.NORMAL, null, config, saveResultCheckbox.getValue(), TaskTemplateType.TUXEDO);
         taskService.executeTaskImmediately(task);
 
         resultArea.setText("Zadanie \"" + taskName + "\" zostało dodane i uruchomione.\nStatus możesz sprawdzić w Tasks → Task list.");

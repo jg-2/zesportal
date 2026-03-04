@@ -70,7 +70,8 @@ public class TaskTemplate {
 
     public enum TaskTemplateType {
         TUXEDO("Tuxedo", "Wywołanie komponentu Oracle Tuxedo"),
-        SSH("SSH", "Wykonanie polecenia przez SSH");
+        SSH("SSH", "Wykonanie polecenia przez SSH"),
+        SAVE_FILE("Zapisz do pliku", "Zapis wyniku zadania do pliku");
 
         private final String displayName;
         private final String description;

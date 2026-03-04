@@ -40,8 +40,18 @@ public class Task {
     @Column(name = "completed_at")
     private Instant completedAt;
 
-    @Column(name = "error_message", length = 1000)
-    private String errorMessage;
+    /** Rezultat: krótki komunikat (sukces/błąd) albo pełny JSON przy zapisie wyniku (typ, czasy, wywołania). */
+    @Column(name = "result", length = 32000)
+    private String result;
+
+    /** Typ zadania (ten sam co w szablonie). Ustawiany z szablonu lub jawnie. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "task_type", length = 30)
+    private TaskTemplate.TaskTemplateType type;
+
+    /** Czy po zakończeniu zapisać pełny rezultat w polu result (JSON). */
+    @Column(name = "save_result")
+    private Boolean saveResult = false;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "task_template_id")
@@ -115,12 +125,28 @@ public class Task {
         this.completedAt = completedAt;
     }
 
-    public String getErrorMessage() {
-        return errorMessage;
+    public String getResult() {
+        return result;
     }
 
-    public void setErrorMessage(String errorMessage) {
-        this.errorMessage = errorMessage;
+    public void setResult(String result) {
+        this.result = result;
+    }
+
+    public TaskTemplate.TaskTemplateType getType() {
+        return type;
+    }
+
+    public void setType(TaskTemplate.TaskTemplateType type) {
+        this.type = type;
+    }
+
+    public Boolean getSaveResult() {
+        return saveResult;
+    }
+
+    public void setSaveResult(Boolean saveResult) {
+        this.saveResult = saveResult;
     }
 
     public TaskTemplate getTaskTemplate() {

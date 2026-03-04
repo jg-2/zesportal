@@ -14,7 +14,7 @@ public class JtuxedoService {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @NotBlank
+    @NotBlank(message = "Podaj nazwę usługi.")
     @Column(name = "name", nullable = false, unique = true, length = 255)
     private String name;
 

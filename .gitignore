@@ -36,3 +36,8 @@ build/
 data/
 *.db
 *.trace.db
+node_modules
+
+### Opcjonalna biblioteka JOLT (Oracle Tuxedo) – nie commituj do repo ###
+lib/jolt.jar
+lib/*.jar

@@ -7,15 +7,15 @@ import com.vaadin.flow.router.Route;
 import com.vaadin.flow.router.PageTitle;
 
 @Route(value = "papiery/zakladanie", layout = MainLayout.class)
-@PageTitle("Zakładanie papierów | Zesportal")
+@PageTitle("Nowe papiery | Zesportal")
 public class ZakladaniePapierowView extends VerticalLayout {
 
     public ZakladaniePapierowView() {
         setPadding(true);
         setSpacing(true);
 
-        H2 title = new H2("Zakładanie papierów");
-        Paragraph description = new Paragraph("Moduł zakładania papierów - do implementacji.");
+        H2 title = new H2("Nowe papiery");
+        Paragraph description = new Paragraph("Moduł Nowe papiery - do implementacji.");
 
         add(title, description);
     }

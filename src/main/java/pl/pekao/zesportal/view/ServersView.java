@@ -24,7 +24,6 @@ public class ServersView extends VerticalLayout {
 
     private final ServerService serverService;
     private final Grid<Server> grid;
-    private final BeanValidationBinder<Server> binder = new BeanValidationBinder<>(Server.class);
 
     public ServersView(ServerService serverService) {
         this.serverService = serverService;
@@ -91,9 +90,9 @@ public class ServersView extends VerticalLayout {
         TextArea descriptionField = new TextArea("Description");
         descriptionField.setWidthFull();
 
-        binder.removeBean();
-        binder.forField(nameField).bind("name");
-        binder.forField(addressField).bind("address");
+        BeanValidationBinder<Server> binder = new BeanValidationBinder<>(Server.class);
+        binder.forField(nameField).asRequired("Name is required").bind("name");
+        binder.forField(addressField).asRequired("Address is required").bind("address");
         binder.forField(descriptionField).bind("description");
         binder.readBean(serverToEdit);
 
@@ -108,7 +107,11 @@ public class ServersView extends VerticalLayout {
                 dialog.close();
                 Notification.show("Server saved", 2000, Notification.Position.MIDDLE);
             } catch (ValidationException ex) {
-                Notification.show("Fill required fields: Name, Address", 3000, Notification.Position.MIDDLE);
+                String msg = ex.getValidationErrors().stream()
+                        .map(ve -> ve.getErrorMessage())
+                        .findFirst()
+                        .orElse("Wypełnij wymagane pola: Name, Address");
+                Notification.show(msg, 3000, Notification.Position.MIDDLE);
             }
         });
         saveBtn.addThemeVariants(ButtonVariant.LUMO_PRIMARY);

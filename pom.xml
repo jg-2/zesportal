@@ -10,7 +10,7 @@
 	</parent>
 	<groupId>pl.pekao</groupId>
 	<artifactId>zesportal</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
+	<version>1.0.0</version>
 	<name>zesportal</name>
 	<description>Zes project for Spring Boot</description>
 	<url/>
@@ -77,6 +77,8 @@
 				<artifactId>spring-boot-maven-plugin</artifactId>
 				<configuration>
 					<jvmArguments>${dev.jvm.args}</jvmArguments>
+					<!-- ZIP = PropertiesLauncher, żeby -Dloader.path=lib ładował JAR-y z katalogu lib/ (np. jolt.jar) -->
+					<layout>ZIP</layout>
 				</configuration>
 			</plugin>
 			<plugin>
@@ -99,6 +101,36 @@
 	</build>
 
 	<profiles>
+		<!-- Profil dist: buduje ZIP do dystrybucji (JAR + run.bat, run.sh, URUCHOMIENIE.txt). Użycie: mvn clean package -Pproduction,dist -->
+		<profile>
+			<id>dist</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-assembly-plugin</artifactId>
+						<version>3.6.0</version>
+						<executions>
+							<execution>
+								<id>dist-zip</id>
+								<phase>package</phase>
+								<goals>
+									<goal>single</goal>
+								</goals>
+								<configuration>
+									<descriptors>
+										<descriptor>assembly-dist.xml</descriptor>
+									</descriptors>
+									<finalName>${project.artifactId}-${project.version}-dist</finalName>
+									<appendAssemblyId>false</appendAssemblyId>
+									<attach>true</attach>
+								</configuration>
+							</execution>
+						</executions>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
 		<!-- Profil domyślny: build deweloperski (szybszy, do pokazów) -->
 		<profile>
 			<id>dev</id>
@@ -109,14 +141,58 @@
 				<vaadin.productionMode>false</vaadin.productionMode>
 				<dev.jvm.args>-Dspring.profiles.active=dev</dev.jvm.args>
 			</properties>
+			<dependencies>
+				<!-- Sterowniki JDBC dostępne w trybie dev (w produkcji dokładamy je do lib/) -->
+				<dependency>
+					<groupId>org.postgresql</groupId>
+					<artifactId>postgresql</artifactId>
+					<scope>runtime</scope>
+				</dependency>
+			</dependencies>
 		</profile>
-		<!-- Profil produkcyjny: pełny build frontendu, minifikacja -->
+		<!-- Profil mazovia: dodaje lib/mazovia.jar do classpath (charset Mazovia dla Informix). Wymaga pliku lib/mazovia.jar. Użycie: run-dev z -Pmazovia lub mvnw spring-boot:run -Pmazovia -->
+		<profile>
+			<id>mazovia</id>
+			<dependencies>
+				<dependency>
+					<groupId>local.charset</groupId>
+					<artifactId>mazovia</artifactId>
+					<version>1</version>
+					<scope>system</scope>
+					<systemPath>${project.basedir}/lib/mazovia.jar</systemPath>
+					<optional>true</optional>
+				</dependency>
+			</dependencies>
+		</profile>
+		<!-- Profil produkcyjny: pełny build frontendu (jar-resources w JAR), minifikacja. JAR do uruchomienia (java -jar) MUSI być zbudowany z -Pproduction. -->
 		<profile>
 			<id>production</id>
 			<properties>
 				<vaadin.productionMode>true</vaadin.productionMode>
+				<vaadin.force.production.build>true</vaadin.force.production.build>
 				<dev.jvm.args></dev.jvm.args>
 			</properties>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>com.vaadin</groupId>
+						<artifactId>vaadin-maven-plugin</artifactId>
+						<version>${vaadin.version}</version>
+						<executions>
+							<execution>
+								<id>build-frontend-production</id>
+								<phase>process-classes</phase>
+								<goals>
+									<goal>build-frontend</goal>
+								</goals>
+								<configuration>
+									<productionMode>true</productionMode>
+								</configuration>
+							</execution>
+						</executions>
+					</plugin>
+				</plugins>
+			</build>
 		</profile>
 	</profiles>
 

@@ -1,11 +1,7 @@
 @echo off
-REM Uruchomienie Zesportal w trybie deweloperskim (do pokazow)
-REM Wymaga: wczesniej wykonane mvn clean package (profil dev jest domyslny)
-
-set JAR=target\zesportal-0.0.1-SNAPSHOT.jar
-if not exist "%JAR%" (
-  echo Budowanie projektu (profil dev)...
-  call mvn clean package -q
-)
-echo Uruchamianie z profilem dev...
-java -Dspring.profiles.active=dev -jar "%JAR%"
+chcp 65001 >nul
+echo ZES Portal - tryb deweloperski (profil dev, Vaadin bez production build)...
+echo Przy Informix + charset Mazovia dodaj -Pmazovia (wymaga lib\mazovia.jar)
+echo.
+call mvnw.cmd spring-boot:run -Dspring-boot.run.jvmArguments="-Dspring.profiles.active=dev"
+pause

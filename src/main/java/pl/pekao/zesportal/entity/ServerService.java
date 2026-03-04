@@ -53,6 +53,14 @@ public class ServerService {
     @Column(name = "tuxedo_user_name", length = 100)
     private String tuxedoUserName;
 
+    /** Tuxedo: true = połączenie bez autentykacji (NOAUTH), false = autentykacja użytkownika/hasła (USRPASSWORD). Domyślnie true. */
+    @Column(name = "tuxedo_no_auth", nullable = false)
+    private Boolean tuxedoNoAuth = true;
+
+    /** Tuxedo: hasło użytkownika (gdy tuxedoNoAuth = false). */
+    @Column(name = "tuxedo_password", length = 500)
+    private String tuxedoPassword;
+
     /** SSH: klucz do podłączenia sesji. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ssh_key_id")
@@ -145,6 +153,22 @@ public class ServerService {
         this.tuxedoUserName = tuxedoUserName;
     }
 
+    public Boolean getTuxedoNoAuth() {
+        return tuxedoNoAuth != null ? tuxedoNoAuth : true;
+    }
+
+    public void setTuxedoNoAuth(Boolean tuxedoNoAuth) {
+        this.tuxedoNoAuth = tuxedoNoAuth;
+    }
+
+    public String getTuxedoPassword() {
+        return tuxedoPassword;
+    }
+
+    public void setTuxedoPassword(String tuxedoPassword) {
+        this.tuxedoPassword = tuxedoPassword;
+    }
+
     public SshKey getSshKey() {
         return sshKey;
     }
@@ -171,7 +195,8 @@ public class ServerService {
 
     public enum ServiceType {
         TUXEDO("Tuxedo", "Połączenie na port Tuxedo"),
-        SSH("SSH", "SSH – logowanie (np. user tuxmae1) i wywołanie skryptów");
+        SSH("SSH", "SSH – logowanie (np. user tuxmae1) i wywołanie skryptów"),
+        DB("Baza danych", "Połączenie JDBC (Informix, Oracle, PostgreSQL, itd.)");
 
         private final String displayName;
         private final String hint;

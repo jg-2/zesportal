@@ -11,9 +11,12 @@ import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
+import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.select.Select;
+import com.vaadin.flow.component.checkbox.Checkbox;
 import com.vaadin.flow.component.textfield.IntegerField;
+import com.vaadin.flow.component.textfield.PasswordField;
 import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.component.textfield.TextArea;
 import com.vaadin.flow.data.binder.BeanValidationBinder;
@@ -29,7 +32,11 @@ import pl.pekao.zesportal.repository.SshKeyRepository;
 import pl.pekao.zesportal.service.EnvironmentService;
 import pl.pekao.zesportal.service.ServerServiceManagementService;
 
+import java.sql.Connection;
+import java.sql.DriverManager;
 import java.util.List;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 @Route(value = "configuration/komponenty-systemowe", layout = MainLayout.class)
 @PageTitle("Komponenty systemowe | Zesportal")
@@ -106,6 +113,14 @@ public class ServerServicesView extends VerticalLayout {
             if (ss.getSshKey() != null) return "klucz " + ss.getSshKey().getName();
             return fromConfig(ss, "username", "user %s");
         }
+        if (ss.getType() == ServiceType.DB) {
+            String url = fromConfigKey(ss.getConfig(), "jdbcUrl");
+            if (url != null && !url.isBlank()) {
+                if (url.length() > 60) url = url.substring(0, 57) + "...";
+                return url;
+            }
+            return "JDBC (skonfiguruj)";
+        }
         return "—";
     }
 
@@ -121,6 +136,50 @@ public class ServerServicesView extends VerticalLayout {
         } catch (Exception ignored) {
         }
         return ss.getConfig();
+    }
+
+    private static String fromConfigKey(String config, String key) {
+        if (config == null || config.isBlank()) return null;
+        try {
+            JsonNode n = JSON.readTree(config);
+            return n.has(key) ? n.get(key).asText() : null;
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private String buildDbConfig(String jdbcUrl, String driverClassName, String username, String password,
+                                  String databaseVendor, String viewNameRegex) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{");
+        if (jdbcUrl != null && !jdbcUrl.isBlank()) sb.append("\"jdbcUrl\":\"").append(escapeJson(jdbcUrl)).append("\"");
+        if (driverClassName != null && !driverClassName.isBlank()) {
+            if (sb.length() > 1) sb.append(",");
+            sb.append("\"driverClassName\":\"").append(escapeJson(driverClassName)).append("\"");
+        }
+        if (username != null && !username.isBlank()) {
+            if (sb.length() > 1) sb.append(",");
+            sb.append("\"username\":\"").append(escapeJson(username)).append("\"");
+        }
+        if (password != null && !password.isBlank()) {
+            if (sb.length() > 1) sb.append(",");
+            sb.append("\"password\":\"").append(escapeJson(password)).append("\"");
+        }
+        if (databaseVendor != null && !databaseVendor.isBlank()) {
+            if (sb.length() > 1) sb.append(",");
+            sb.append("\"databaseVendor\":\"").append(escapeJson(databaseVendor)).append("\"");
+        }
+        if (viewNameRegex != null && !viewNameRegex.isBlank()) {
+            if (sb.length() > 1) sb.append(",");
+            sb.append("\"viewNameRegex\":\"").append(escapeJson(viewNameRegex)).append("\"");
+        }
+        sb.append("}");
+        return sb.toString();
+    }
+
+    private static String escapeJson(String s) {
+        if (s == null) return "";
+        return s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r");
     }
 
     private String buildTuxedoConfig(Integer port, Integer poolMin, Integer poolMax, String tuxedoUserName) {
@@ -164,6 +223,8 @@ public class ServerServicesView extends VerticalLayout {
             toEdit.setPoolMin(existing.getPoolMin());
             toEdit.setPoolMax(existing.getPoolMax());
             toEdit.setTuxedoUserName(existing.getTuxedoUserName());
+            toEdit.setTuxedoNoAuth(existing.getTuxedoNoAuth());
+            toEdit.setTuxedoPassword(existing.getTuxedoPassword());
             toEdit.setSshKey(existing.getSshKey());
             toEdit.setConfig(existing.getConfig());
             toEdit.setDescription(existing.getDescription());
@@ -241,6 +302,22 @@ public class ServerServicesView extends VerticalLayout {
         tuxedoUserNameField.setWidthFull();
         tuxedoUserNameField.setVisible(toEdit.getType() == ServiceType.TUXEDO);
 
+        Checkbox tuxedoNoAuthCheckbox = new Checkbox("Autentykacja bez hasła (NOAUTH)", Boolean.TRUE.equals(toEdit.getTuxedoNoAuth()));
+        tuxedoNoAuthCheckbox.setWidthFull();
+        tuxedoNoAuthCheckbox.setVisible(toEdit.getType() == ServiceType.TUXEDO);
+
+        PasswordField tuxedoPasswordField = new PasswordField("Hasło (Tuxedo)");
+        tuxedoPasswordField.setWidthFull();
+        tuxedoPasswordField.setPlaceholder("Opcjonalnie, gdy wyłączona autentykacja bez hasła");
+        tuxedoPasswordField.setVisible(toEdit.getType() == ServiceType.TUXEDO);
+        tuxedoPasswordField.setEnabled(!Boolean.TRUE.equals(toEdit.getTuxedoNoAuth()));
+
+        tuxedoNoAuthCheckbox.addValueChangeListener(e -> {
+            boolean noAuth = Boolean.TRUE.equals(e.getValue());
+            tuxedoPasswordField.setEnabled(!noAuth);
+            if (noAuth) tuxedoPasswordField.clear();
+        });
+
         List<SshKey> sshKeys = sshKeyRepository.findAllByOrderByNameAsc();
         Select<SshKey> sshKeySelect = new Select<>();
         sshKeySelect.setLabel("Klucz do podłączenia sesji (SSH)");
@@ -249,14 +326,120 @@ public class ServerServicesView extends VerticalLayout {
         sshKeySelect.setWidthFull();
         sshKeySelect.setVisible(toEdit.getType() == ServiceType.SSH);
 
+        Select<DatabaseVendor> dbVendorSelect = new Select<>();
+        dbVendorSelect.setLabel("Typ bazy danych");
+        dbVendorSelect.setItems(DatabaseVendor.values());
+        dbVendorSelect.setItemLabelGenerator(DatabaseVendor::getDisplayName);
+        dbVendorSelect.setWidthFull();
+        dbVendorSelect.setVisible(toEdit.getType() == ServiceType.DB);
+
+        TextField jdbcUrlField = new TextField("URL JDBC");
+        jdbcUrlField.setWidthFull();
+        jdbcUrlField.setPlaceholder("jdbc:informix-sqli://...");
+        jdbcUrlField.setVisible(toEdit.getType() == ServiceType.DB);
+
+        TextField driverClassField = new TextField("Klasa sterownika");
+        driverClassField.setWidthFull();
+        driverClassField.setPlaceholder("com.informix.jdbc.IfxDriver");
+        driverClassField.setVisible(toEdit.getType() == ServiceType.DB);
+
+        TextField jdbcUsernameField = new TextField("Użytkownik (JDBC)");
+        jdbcUsernameField.setWidthFull();
+        jdbcUsernameField.setVisible(toEdit.getType() == ServiceType.DB);
+
+        PasswordField jdbcPasswordField = new PasswordField("Hasło (JDBC)");
+        jdbcPasswordField.setWidthFull();
+        jdbcPasswordField.setVisible(toEdit.getType() == ServiceType.DB);
+
+        TextField viewNameRegexField = new TextField("Regex dla widoków");
+        viewNameRegexField.setWidthFull();
+        viewNameRegexField.setPlaceholder("np. ^V_.* – tylko widoki z zadanym prefixem (puste = bez ograniczeń)");
+        viewNameRegexField.setHelperText("Aplikacja pozwala wywoływać tylko view pasujące do tego wzorca.");
+        viewNameRegexField.setVisible(toEdit.getType() == ServiceType.DB);
+
+        Button testConnectionButton = new Button("Test połączenia");
+        testConnectionButton.setVisible(toEdit.getType() == ServiceType.DB);
+        testConnectionButton.addClickListener(ev -> {
+            String url = jdbcUrlField.getValue();
+            String driver = driverClassField.getValue();
+            String user = jdbcUsernameField.getValue();
+            String pwd = jdbcPasswordField.getValue();
+            if (pwd == null || pwd.isBlank()) pwd = existing != null ? fromConfigKey(existing.getConfig(), "password") : null;
+            if (url == null || url.isBlank()) {
+                Notification.show("Podaj URL JDBC", 3000, Notification.Position.MIDDLE);
+                return;
+            }
+            testConnectionButton.setEnabled(false);
+            String finalPwd = pwd;
+            UI ui = UI.getCurrent();
+            ClassLoader appClassLoader = getClass().getClassLoader();
+            new Thread(() -> {
+                String result;
+                Thread currentThread = Thread.currentThread();
+                ClassLoader previousCcl = currentThread.getContextClassLoader();
+                try {
+                    currentThread.setContextClassLoader(appClassLoader);
+                    if (driver != null && !driver.isBlank()) {
+                        try {
+                            Class.forName(driver, true, appClassLoader);
+                        } catch (ClassNotFoundException e) {
+                            if (ui != null) ui.access(() -> {
+                                Notification.show("Sterownik nie znaleziony: " + driver, 5000, Notification.Position.MIDDLE);
+                                testConnectionButton.setEnabled(true);
+                            });
+                            return;
+                        }
+                    }
+                    try (Connection c = DriverManager.getConnection(url, user != null ? user : "", finalPwd != null ? finalPwd : "")) {
+                        result = "Połączenie OK";
+                    }
+                } catch (Exception ex) {
+                    result = "Błąd: " + (ex.getMessage() != null ? ex.getMessage() : ex.getClass().getSimpleName());
+                } finally {
+                    currentThread.setContextClassLoader(previousCcl);
+                }
+                String finalResult = result;
+                if (ui != null) ui.access(() -> {
+                    Notification.show(finalResult, finalResult.startsWith("Błąd") ? 6000 : 3000, Notification.Position.MIDDLE);
+                    testConnectionButton.setEnabled(true);
+                });
+            }).start();
+        });
+
+        dbVendorSelect.addValueChangeListener(e -> {
+            DatabaseVendor v = e.getValue();
+            if (v != null) {
+                jdbcUrlField.setPlaceholder(v.getUrlPlaceholder());
+                driverClassField.setValue(v.getDefaultDriver() != null ? v.getDefaultDriver() : "");
+            }
+        });
+
         typeSelect.addValueChangeListener(e -> {
-            boolean tuxedo = e.getValue() == ServiceType.TUXEDO;
+            ServiceType t = e.getValue();
+            boolean tuxedo = t == ServiceType.TUXEDO;
+            boolean ssh = t == ServiceType.SSH;
+            boolean db = t == ServiceType.DB;
             portField.setVisible(tuxedo);
-            usernameField.setVisible(!tuxedo);
+            usernameField.setVisible(ssh);
             poolMinField.setVisible(tuxedo);
             poolMaxField.setVisible(tuxedo);
             tuxedoUserNameField.setVisible(tuxedo);
-            sshKeySelect.setVisible(!tuxedo);
+            tuxedoNoAuthCheckbox.setVisible(tuxedo);
+            tuxedoPasswordField.setVisible(tuxedo);
+            if (tuxedo) tuxedoPasswordField.setEnabled(!Boolean.TRUE.equals(tuxedoNoAuthCheckbox.getValue()));
+            sshKeySelect.setVisible(ssh);
+            dbVendorSelect.setVisible(db);
+            jdbcUrlField.setVisible(db);
+            driverClassField.setVisible(db);
+            jdbcUsernameField.setVisible(db);
+            jdbcPasswordField.setVisible(db);
+            viewNameRegexField.setVisible(db);
+            testConnectionButton.setVisible(db);
+            if (db && dbVendorSelect.getValue() == null) {
+                dbVendorSelect.setValue(DatabaseVendor.INFORMIX);
+                driverClassField.setValue(DatabaseVendor.INFORMIX.getDefaultDriver());
+                jdbcUrlField.setPlaceholder(DatabaseVendor.INFORMIX.getUrlPlaceholder());
+            }
         });
 
         if (existing != null) {
@@ -265,6 +448,8 @@ public class ServerServicesView extends VerticalLayout {
             if (existing.getPoolMin() != null) poolMinField.setValue(existing.getPoolMin());
             if (existing.getPoolMax() != null) poolMaxField.setValue(existing.getPoolMax());
             if (existing.getTuxedoUserName() != null) tuxedoUserNameField.setValue(existing.getTuxedoUserName());
+            if (existing.getTuxedoNoAuth() != null) tuxedoNoAuthCheckbox.setValue(existing.getTuxedoNoAuth());
+            tuxedoPasswordField.setEnabled(!Boolean.TRUE.equals(existing.getTuxedoNoAuth()));
             if (existing.getSshKey() != null && sshKeys.stream().anyMatch(k -> k.getId().equals(existing.getSshKey().getId()))) {
                 sshKeys.stream().filter(k -> k.getId().equals(existing.getSshKey().getId())).findFirst().ifPresent(sshKeySelect::setValue);
             }
@@ -276,6 +461,28 @@ public class ServerServicesView extends VerticalLayout {
                 if (existing.getType() == ServiceType.SSH && n.has("username")) usernameField.setValue(n.get("username").asText());
             } catch (Exception ignored) {
             }
+        }
+        if (toEdit.getType() == ServiceType.DB && existing != null && existing.getConfig() != null && !existing.getConfig().isBlank()) {
+            try {
+                JsonNode n = JSON.readTree(existing.getConfig());
+                if (n.has("databaseVendor")) {
+                    String v = n.get("databaseVendor").asText();
+                    for (DatabaseVendor dv : DatabaseVendor.values()) {
+                        if (dv.name().equals(v)) { dbVendorSelect.setValue(dv); break; }
+                    }
+                }
+                if (n.has("jdbcUrl")) jdbcUrlField.setValue(n.get("jdbcUrl").asText());
+                if (n.has("driverClassName")) driverClassField.setValue(n.get("driverClassName").asText());
+                if (n.has("username")) jdbcUsernameField.setValue(n.get("username").asText());
+                if (n.has("password")) jdbcPasswordField.setValue(n.get("password").asText());
+                if (n.has("viewNameRegex")) viewNameRegexField.setValue(n.get("viewNameRegex").asText());
+            } catch (Exception ignored) {
+            }
+        }
+        if (toEdit.getType() == ServiceType.DB && existing == null) {
+            dbVendorSelect.setValue(DatabaseVendor.INFORMIX);
+            driverClassField.setValue(DatabaseVendor.INFORMIX.getDefaultDriver());
+            jdbcUrlField.setPlaceholder(DatabaseVendor.INFORMIX.getUrlPlaceholder());
         }
 
         TextArea descriptionField = new TextArea("Opis");
@@ -291,6 +498,7 @@ public class ServerServicesView extends VerticalLayout {
         binder.forField(poolMinField).bind("poolMin");
         binder.forField(poolMaxField).bind("poolMax");
         binder.forField(tuxedoUserNameField).bind("tuxedoUserName");
+        binder.forField(tuxedoNoAuthCheckbox).bind("tuxedoNoAuth");
         binder.forField(sshKeySelect).bind("sshKey");
         binder.forField(descriptionField).bind("description");
         binder.readBean(toEdit);
@@ -299,21 +507,58 @@ public class ServerServicesView extends VerticalLayout {
                 environmentSelect, serverSelect, nameField, typeSelect,
                 portField, usernameField,
                 poolMinField, poolMaxField, tuxedoUserNameField,
+                tuxedoNoAuthCheckbox, tuxedoPasswordField,
                 sshKeySelect,
+                dbVendorSelect, jdbcUrlField, driverClassField, jdbcUsernameField, jdbcPasswordField,
+                viewNameRegexField, testConnectionButton,
                 descriptionField);
         form.setResponsiveSteps(new FormLayout.ResponsiveStep("0", 1));
 
         Button saveBtn = new Button("Zapisz", e -> {
             try {
                 binder.writeBean(toEdit);
+                if (toEdit.getType() == ServiceType.TUXEDO) {
+                    if (tuxedoPasswordField.getValue() != null && !tuxedoPasswordField.getValue().isBlank()) {
+                        toEdit.setTuxedoPassword(tuxedoPasswordField.getValue());
+                    } else if (existing != null && existing.getTuxedoPassword() != null) {
+                        toEdit.setTuxedoPassword(existing.getTuxedoPassword());
+                    }
+                }
                 if (toEdit.getEnvironment() == null || toEdit.getServer() == null) {
                     Notification.show("Wybierz środowisko i serwer", 3000, Notification.Position.MIDDLE);
                     return;
                 }
                 if (toEdit.getType() == ServiceType.TUXEDO) {
                     toEdit.setConfig(buildTuxedoConfig(portField.getValue(), poolMinField.getValue(), poolMaxField.getValue(), tuxedoUserNameField.getValue()));
-                } else {
+                } else if (toEdit.getType() == ServiceType.SSH) {
                     toEdit.setConfig(buildSshConfig(usernameField.getValue(), sshKeySelect.getValue()));
+                } else if (toEdit.getType() == ServiceType.DB) {
+                    String jdbcUrl = jdbcUrlField.getValue();
+                    if (jdbcUrl == null || jdbcUrl.isBlank()) {
+                        Notification.show("Podaj URL JDBC", 3000, Notification.Position.MIDDLE);
+                        return;
+                    }
+                    String pwd = jdbcPasswordField.getValue();
+                    if ((pwd == null || pwd.isBlank()) && existing != null && existing.getConfig() != null) {
+                        pwd = fromConfigKey(existing.getConfig(), "password");
+                    }
+                    String vendor = dbVendorSelect.getValue() != null ? dbVendorSelect.getValue().name() : null;
+                    String viewRegex = viewNameRegexField.getValue();
+                    if (viewRegex != null && !viewRegex.isBlank()) {
+                        try {
+                            Pattern.compile(viewRegex);
+                        } catch (PatternSyntaxException ex) {
+                            Notification.show("Nieprawidłowy regex dla widoków: " + ex.getMessage(), 4000, Notification.Position.MIDDLE);
+                            return;
+                        }
+                    }
+                    toEdit.setConfig(buildDbConfig(
+                            jdbcUrl,
+                            driverClassField.getValue(),
+                            jdbcUsernameField.getValue(),
+                            pwd,
+                            vendor,
+                            viewRegex));
                 }
                 serviceManagement.save(toEdit);
                 refreshGrid();

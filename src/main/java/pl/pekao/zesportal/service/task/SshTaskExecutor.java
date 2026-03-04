@@ -1,5 +1,7 @@
 package pl.pekao.zesportal.service.task;
 
+import java.time.Instant;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -22,11 +24,13 @@ public class SshTaskExecutor implements TaskExecutor {
     }
 
     @Override
-    public void execute(Task task, TaskTemplate template) throws Exception {
+    public TaskExecutionResult execute(Task task, TaskTemplate template) throws Exception {
         log.info("SshTaskExecutor: wykonuję zadanie {} (szablon: {}, config: {})",
-                task.getName(), template.getName(), template.getConfig());
+                task.getName(), template != null ? template.getName() : null, template != null ? template.getConfig() : null);
+        Instant startedAt = task.getStartedAt() != null ? task.getStartedAt() : Instant.now();
         // TODO: odczyt config JSON (host, command, user), wywołanie polecenia SSH
-        // Na razie symulacja
         Thread.sleep(500);
+        return new TaskExecutionResult(true, "Zadanie wykonane pomyślnie",
+                TaskTemplateType.SSH, startedAt, Instant.now(), null);
     }
 }

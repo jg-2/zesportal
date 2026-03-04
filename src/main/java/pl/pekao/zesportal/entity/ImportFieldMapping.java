@@ -99,6 +99,7 @@ public class ImportFieldMapping {
 
     public enum SourceType {
         FILE_FIELD("Pole z pliku"),
+        DATABASE_FIELD("Pole z widoku"),
         CONSTANT("Wartość stała");
 
         private final String displayName;
